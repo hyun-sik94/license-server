@@ -18,3 +18,7 @@ class LicenseStatusResponse(BaseModel):
 # 기능 권한 응답 형식
 class FeaturePermissionResponse(BaseModel):
     authorized: bool
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
