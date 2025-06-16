@@ -1,11 +1,12 @@
 # 가상환경 폴더 제외
 venv/
 
-# 파이썬 임시 캐시 폴더 제외
+# 파이썬 캐시 파일 및 폴더 제외
 __pycache__/
+*.pyc
 
-# 로컬 테스트용 데이터베이스 파일 제외
-license.sqlite
+# 로컬 테스트용 데이터베이스 파일 제외 (중요: 운영을 위해 git으로 관리)
+# license.sqlite
 
 # VS Code 설정 폴더 제외
 .vscode/
