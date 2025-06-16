@@ -1,4 +1,4 @@
-# main.py
+# main.py (수정)
 import os
 from datetime import date, timedelta
 import uuid
@@ -15,10 +15,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_db():
     db = database.SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    try: yield db
+    finally: db.close()
 
 async def verify_admin_secret(x_admin_secret: str = Header(None)):
     admin_secret = os.getenv("ADMIN_SECRET_KEY")
@@ -31,22 +29,26 @@ def create_test_data():
     db = database.SessionLocal()
     if db.query(models.License).count() == 0:
         print("테스트용 라이선스 데이터를 생성합니다.")
-        pro_license = models.License(license_key="PRO-XXXX-YYYY-ZZZZ", user_id="test_user", tier="pro", expires_on=date.today() + timedelta(days=365))
+        new_key = "PRO-XXXX-YYYY-ZZZZ"
+        pro_license = models.License(license_key=new_key, user_id="test_user", expires_on=date.today() + timedelta(days=365))
         db.add(pro_license)
-        pro_permissions = [models.Permission(tier="pro", feature_name=f) for f in ['like', 'comment', 'reply', 'ai_comment', 'add_neighbor']]
+        features = ['like', 'comment', 'reply', 'ai_comment', 'add_neighbor']
+        pro_permissions = [models.Permission(license_key=new_key, feature_name=f) for f in features]
         db.add_all(pro_permissions)
         db.commit()
     db.close()
 
+# --- 클라이언트용 API ---
 @app.post("/api/validate_license", response_model=schemas.LicenseStatusResponse)
 def validate_license(request: schemas.LicenseRequest, db: Session = Depends(get_db)):
     license = db.query(models.License).filter(models.License.license_key == request.license_key).first()
-    if not license: return {"status": "invalid", "expires_on": None, "features": []}
+    if not license: return {"status": "invalid", "features": []}
     if license.expires_on < date.today(): return {"status": "expired", "expires_on": str(license.expires_on), "features": []}
-    permissions = db.query(models.Permission).filter(models.Permission.tier == license.tier).all()
-    allowed_features = [p.feature_name for p in permissions]
+    
+    allowed_features = [p.feature_name for p in license.permissions]
     return {"status": "valid", "expires_on": str(license.expires_on), "features": allowed_features}
 
+# --- 관리 도구용 API ---
 @app.post("/api/admin_login")
 def admin_login(request: schemas.AdminLoginRequest):
     admin_username = os.getenv("ADMIN_USERNAME", "admin")
@@ -57,37 +59,47 @@ def admin_login(request: schemas.AdminLoginRequest):
 
 @app.get("/api/admin/licenses", response_model=list[schemas.LicenseData], dependencies=[Depends(verify_admin_secret)])
 def list_all_licenses(db: Session = Depends(get_db)):
-    return db.query(models.License).all()
+    licenses = db.query(models.License).all()
+    results = []
+    for lic in licenses:
+        features = [p.feature_name for p in lic.permissions]
+        results.append(schemas.LicenseData(license_key=lic.license_key, expires_on=lic.expires_on, user_id=lic.user_id, features=features))
+    return results
 
 @app.post("/api/admin/create_license", response_model=schemas.LicenseData, dependencies=[Depends(verify_admin_secret)])
 def create_new_license(request: schemas.CreateLicenseRequest, db: Session = Depends(get_db)):
     new_key = "NEW-" + str(uuid.uuid4()).split('-')[0].upper()
     expires_on = date.today() + timedelta(days=request.days)
-    new_license = models.License(license_key=new_key, tier=request.tier, expires_on=expires_on, user_id=request.user_id)
+    new_license = models.License(license_key=new_key, expires_on=expires_on, user_id=request.user_id)
     db.add(new_license)
-    db.commit()
-    db.refresh(new_license)
-    return new_license
+    db.commit(); db.refresh(new_license)
+    return schemas.LicenseData.from_orm(new_license)
 
 @app.post("/api/admin/extend_license", response_model=schemas.LicenseData, dependencies=[Depends(verify_admin_secret)])
 def extend_existing_license(request: schemas.ExtendLicenseRequest, db: Session = Depends(get_db)):
     license = db.query(models.License).filter(models.License.license_key == request.license_key).first()
     if not license: raise HTTPException(status_code=404, detail="라이선스 키를 찾을 수 없습니다.")
     license.expires_on += timedelta(days=request.days)
-    db.commit()
-    db.refresh(license)
-    return license
+    db.commit(); db.refresh(license)
+    return schemas.LicenseData.from_orm(license)
 
-@app.get("/api/admin/permissions/{tier}", response_model=schemas.TierPermissionResponse, dependencies=[Depends(verify_admin_secret)])
-def get_permissions_for_tier(tier: str, db: Session = Depends(get_db)):
-    permissions = db.query(models.Permission).filter(models.Permission.tier == tier).all()
-    return {"tier": tier, "permissions": [p.feature_name for p in permissions]}
-
-@app.post("/api/admin/save_permissions", response_model=schemas.TierPermissionResponse, dependencies=[Depends(verify_admin_secret)])
-def save_permissions_for_tier(request: schemas.SavePermissionsRequest, db: Session = Depends(get_db)):
-    db.query(models.Permission).filter(models.Permission.tier == request.tier).delete()
+@app.delete("/api/admin/licenses/{license_key}", status_code=204, dependencies=[Depends(verify_admin_secret)])
+def delete_license(license_key: str, db: Session = Depends(get_db)):
+    license = db.query(models.License).filter(models.License.license_key == license_key).first()
+    if not license: raise HTTPException(status_code=404, detail="라이선스 키를 찾을 수 없습니다.")
+    db.delete(license)
     db.commit()
+    return
+
+@app.post("/api/admin/permissions/{license_key}", response_model=list[str], dependencies=[Depends(verify_admin_secret)])
+def save_permissions_for_license(license_key: str, request: schemas.SavePermissionsRequest, db: Session = Depends(get_db)):
+    license = db.query(models.License).filter(models.License.license_key == license_key).first()
+    if not license: raise HTTPException(status_code=404, detail="라이선스 키를 찾을 수 없습니다.")
+    
+    db.query(models.Permission).filter(models.Permission.license_key == license_key).delete()
+    db.commit()
+    
     for feature in request.features:
-        db.add(models.Permission(tier=request.tier, feature_name=feature))
+        db.add(models.Permission(license_key=license_key, feature_name=feature))
     db.commit()
-    return {"tier": request.tier, "permissions": request.features}
+    return request.features

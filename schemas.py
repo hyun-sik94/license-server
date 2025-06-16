@@ -1,42 +1,31 @@
-# schemas.py
+# schemas.py (수정)
 from pydantic import BaseModel
 from datetime import date
 
+# --- 클라이언트용 스키마 ---
 class LicenseRequest(BaseModel):
     license_key: str
-
-class FeatureRequest(BaseModel):
-    license_key: str
-    feature: str
 
 class LicenseStatusResponse(BaseModel):
     status: str
     expires_on: str | None = None
     features: list[str] = []
 
-class FeaturePermissionResponse(BaseModel):
-    authorized: bool
-
+# --- 관리 도구용 스키마 ---
 class AdminLoginRequest(BaseModel):
     username: str
     password: str
 
 class LicenseData(BaseModel):
     license_key: str
-    tier: str
     expires_on: date
     user_id: str | None = None
-    class Config: from_attributes = True
+    features: list[str] = []
 
-class PermissionData(BaseModel):
-    feature_name: str
-
-class TierPermissionResponse(BaseModel):
-    tier: str
-    permissions: list[str]
+    class Config:
+        from_attributes = True
 
 class CreateLicenseRequest(BaseModel):
-    tier: str
     days: int
     user_id: str | None = None
 
@@ -45,5 +34,4 @@ class ExtendLicenseRequest(BaseModel):
     days: int
 
 class SavePermissionsRequest(BaseModel):
-    tier: str
     features: list[str]
