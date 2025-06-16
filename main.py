@@ -85,9 +85,18 @@ def extend_existing_license(request: schemas.ExtendLicenseRequest, db: Session =
 
 @app.delete("/api/admin/licenses/{license_key}", status_code=204, dependencies=[Depends(verify_admin_secret)])
 def delete_license(license_key: str, db: Session = Depends(get_db)):
+    # 1. 삭제할 라이선스가 존재하는지 먼저 확인합니다.
     license = db.query(models.License).filter(models.License.license_key == license_key).first()
-    if not license: raise HTTPException(status_code=404, detail="라이선스 키를 찾을 수 없습니다.")
+    if not license:
+        raise HTTPException(status_code=404, detail="삭제할 라이선스 키를 찾을 수 없습니다.")
+
+    # 2. 이 라이선스키에 연결된 모든 권한(Permission)들을 명시적으로 먼저 삭제합니다.
+    db.query(models.Permission).filter(models.Permission.license_key == license_key).delete(synchronize_session=False)
+
+    # 3. 이제 라이선스 자체를 삭제합니다.
     db.delete(license)
+
+    # 4. 모든 변경사항을 데이터베이스에 최종 반영합니다.
     db.commit()
     return
 
