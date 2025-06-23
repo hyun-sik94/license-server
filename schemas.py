@@ -1,10 +1,11 @@
-# schemas.py (수정)
+# schemas.py
 from pydantic import BaseModel
 from datetime import date
 
 # --- 클라이언트용 스키마 ---
 class LicenseRequest(BaseModel):
     license_key: str
+    mac_address: str # <<< MAC 주소 필드 추가
 
 class LicenseStatusResponse(BaseModel):
     status: str
@@ -16,11 +17,12 @@ class AdminLoginRequest(BaseModel):
     username: str
     password: str
 
-class LicenseData(BaseModel):
+class LicenseData(BaseModel): # <<< MAC 주소 필드 추가
     license_key: str
     expires_on: date
     user_id: str | None = None
     features: list[str] = []
+    registered_mac: str | None = None
 
     class Config:
         from_attributes = True
@@ -33,9 +35,12 @@ class ExtendLicenseRequest(BaseModel):
     license_key: str
     days: int
 
-class SavePermissionsRequest(BaseModel):
-    features: list[str]
-
 class SetExpiryRequest(BaseModel):
     license_key: str
-    expires_on: date # 날짜 형식을 직접 받도록 설정
+    expires_on: date
+
+class SavePermissionsRequest(BaseModel):
+    features: list[str]
+    
+class ResetMacRequest(BaseModel): # <<< MAC 주소 초기화용 스키마 추가
+    license_key: str
