@@ -35,3 +35,7 @@ class ExtendLicenseRequest(BaseModel):
 
 class SavePermissionsRequest(BaseModel):
     features: list[str]
+
+class SetExpiryRequest(BaseModel):
+    license_key: str
+    expires_on: date # 날짜 형식을 직접 받도록 설정

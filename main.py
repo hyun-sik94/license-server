@@ -112,3 +112,21 @@ def save_permissions_for_license(license_key: str, request: schemas.SavePermissi
         db.add(models.Permission(license_key=license_key, feature_name=feature))
     db.commit()
     return request.features
+
+@app.post("/api/admin/set_expiry", response_model=schemas.LicenseData, dependencies=[Depends(verify_admin_secret)])
+def set_license_expiry(request: schemas.SetExpiryRequest, db: Session = Depends(get_db)):
+    license = db.query(models.License).filter(models.License.license_key == request.license_key).first()
+    if not license:
+        raise HTTPException(status_code=404, detail="라이선스 키를 찾을 수 없습니다.")
+    
+    license.expires_on = request.expires_on
+    db.commit()
+    db.refresh(license)
+    # SQLAlchemy 모델 객체를 Pydantic 모델로 변환하여 반환
+    features = [p.feature_name for p in license.permissions]
+    return schemas.LicenseData(
+        license_key=license.license_key,
+        expires_on=license.expires_on,
+        user_id=license.user_id,
+        features=features
+    )
