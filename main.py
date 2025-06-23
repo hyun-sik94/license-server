@@ -137,3 +137,37 @@ def reset_mac_address(request: schemas.ResetMacRequest, db: Session = Depends(ge
     
     features = [p.feature_name for p in license.permissions]
     return schemas.LicenseData(license_key=license.license_key, expires_on=license.expires_on, user_id=license.user_id, features=features, registered_mac=license.registered_mac)
+
+@app.post("/api/admin/set_mac", response_model=schemas.LicenseData, dependencies=[Depends(verify_admin_secret)])
+def set_mac_address(request: schemas.SetMacRequest, db: Session = Depends(get_db)):
+    """특정 라이선스의 MAC 주소를 관리자가 직접 설정합니다."""
+    license = db.query(models.License).filter(models.License.license_key == request.license_key).first()
+    if not license:
+        raise HTTPException(status_code=404, detail="라이선스 키를 찾을 수 없습니다.")
+    
+    license.registered_mac = request.mac_address
+    db.commit()
+    db.refresh(license)
+    
+    features = [p.feature_name for p in license.permissions]
+    return schemas.LicenseData(
+        license_key=license.license_key, expires_on=license.expires_on, user_id=license.user_id, 
+        features=features, registered_mac=license.registered_mac
+    )
+
+@app.post("/api/admin/reset_mac", response_model=schemas.LicenseData, dependencies=[Depends(verify_admin_secret)])
+def reset_mac_address(request: schemas.ResetMacRequest, db: Session = Depends(get_db)):
+    """특정 라이선스에 등록된 MAC 주소를 초기화(None으로 설정)합니다."""
+    license = db.query(models.License).filter(models.License.license_key == request.license_key).first()
+    if not license:
+        raise HTTPException(status_code=404, detail="라이선스 키를 찾을 수 없습니다.")
+    
+    license.registered_mac = None # MAC 주소를 비움
+    db.commit()
+    db.refresh(license)
+    
+    features = [p.feature_name for p in license.permissions]
+    return schemas.LicenseData(
+        license_key=license.license_key, expires_on=license.expires_on, user_id=license.user_id, 
+        features=features, registered_mac=license.registered_mac
+    )

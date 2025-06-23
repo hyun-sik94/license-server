@@ -44,3 +44,7 @@ class SavePermissionsRequest(BaseModel):
     
 class ResetMacRequest(BaseModel): # <<< MAC 주소 초기화용 스키마 추가
     license_key: str
+
+class SetMacRequest(BaseModel):
+    license_key: str
+    mac_address: str
