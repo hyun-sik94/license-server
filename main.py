@@ -141,3 +141,11 @@ def reset_mac_address(request: schemas.ResetMacRequest, db: Session = Depends(ge
     db.commit(); db.refresh(license)
     features = [p.feature_name for p in license.permissions]
     return schemas.LicenseData(license_key=license.license_key, expires_on=license.expires_on, user_id=license.user_id, features=features, registered_mac=license.registered_mac)
+
+@app.get("/")
+def read_get_root():
+    return {"status": "ok", "message": "License server is running."}
+
+@app.post("/")
+def read_post_root():
+    return {"status": "ok", "message": "License server is running."}
