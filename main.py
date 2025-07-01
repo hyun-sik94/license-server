@@ -142,6 +142,25 @@ def reset_mac_address(request: schemas.ResetMacRequest, db: Session = Depends(ge
     features = [p.feature_name for p in license.permissions]
     return schemas.LicenseData(license_key=license.license_key, expires_on=license.expires_on, user_id=license.user_id, features=features, registered_mac=license.registered_mac)
 
+# <<<< 추가된 API 엔드포인트 >>>>
+@app.post("/api/admin/set_user_id", response_model=schemas.LicenseData, dependencies=[Depends(verify_admin_secret)])
+def set_user_id(request: schemas.SetUserIdRequest, db: Session = Depends(get_db)):
+    license = db.query(models.License).filter(models.License.license_key == request.license_key).first()
+    if not license:
+        raise HTTPException(status_code=404, detail="라이선스 키를 찾을 수 없습니다.")
+    license.user_id = request.user_id
+    db.commit()
+    db.refresh(license)
+    features = [p.feature_name for p in license.permissions]
+    return schemas.LicenseData(
+        license_key=license.license_key,
+        expires_on=license.expires_on,
+        user_id=license.user_id,
+        features=features,
+        registered_mac=license.registered_mac
+    )
+# <<<< 추가 종료 >>>>
+
 @app.get("/")
 def read_get_root():
     return {"status": "ok", "message": "License server is running."}
